@@ -24,11 +24,11 @@ pub struct Config {
     pub token_supply_config: AmountConfig<u64>,
     pub token_decimals_config: AmountConfig<u8>,
 
-    pub initial_virtual_token_reserves_config: u64,
-    pub initial_virtual_sol_reserves_config: u64,
-    pub initial_real_token_reserves_config: u64,
-    pub initial_raydium_token_reserves: u64,
-    pub initial_raydium_sol_amount: u64,
+    pub initial_virtual_token_reserves_config: u64, // vtr
+    pub initial_virtual_sol_reserves_config: u64,   // vsr
+    pub initial_real_token_reserves_config: u64,    // e.g 80% reserved for the bodning curve
+    pub initial_raydium_token_reserves: u64,        // e.g 20% of tokens for the raydium pool
+    pub initial_raydium_sol_amount: u64,            // the sol amount to be seeded inside the pool
 
     pub initialized: bool,
 }

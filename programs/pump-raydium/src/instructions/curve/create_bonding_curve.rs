@@ -29,6 +29,7 @@ pub struct CreateBondingCurve<'info> {
     )]
     pub global_vault: AccountInfo<'info>,
 
+    /// User calling the instruction
     #[account(mut)]
     creator: Signer<'info>,
 
@@ -60,7 +61,7 @@ pub struct CreateBondingCurve<'info> {
         bump,
         seeds::program = metadata::ID
     )]
-    token_metadata_account: UncheckedAccount<'info>,
+    token_metadata_account: UncheckedAccount<'info>, // PDA account
 
     /// CHECK: created in instruction
     #[account(
@@ -73,7 +74,7 @@ pub struct CreateBondingCurve<'info> {
         bump,
         seeds::program = associated_token::ID
     )]
-    global_token_account: UncheckedAccount<'info>,
+    global_token_account: UncheckedAccount<'info>, // ATA to hold new tokens
 
     #[account(address = system_program::ID)]
     system_program: Program<'info, System>,
@@ -90,7 +91,6 @@ pub struct CreateBondingCurve<'info> {
     #[account(address = metadata::ID)]
     mpl_token_metadata_program: Program<'info, Metadata>,
 
-    //  team wallet
     /// CHECK: should be same with the address in the global_config
     #[account(
         mut,
@@ -114,125 +114,138 @@ impl<'info> CreateBondingCurve<'info> {
         uri: String,
         global_vault_bump: u8,
     ) -> Result<()> {
-        // let global_config = &self.global_config;
-        // let creator = &self.creator;
-        // let token = &self.token;
-        // let global_token_account = &self.global_token_account;
-        // let bonding_curve = &mut self.bonding_curve;
-        // let global_vault = &self.global_vault;
+        let global_config = &self.global_config;
+        let creator = &self.creator;
+        let token = &self.token;
+        let global_token_account = &self.global_token_account; // ata
+        let bonding_curve = &mut self.bonding_curve; // pda
+        let global_vault = &self.global_vault;
 
-        // //  check params
-        // let decimal_multiplier = 10u64.pow(decimals as u32);
-        // let fractional_tokens = token_supply % decimal_multiplier;
-        // if fractional_tokens != 0 {
-        //     return Err(ValueInvalid.into());
+        //  check params
+        let decimal_multiplier = 10u64.pow(decimals as u32); // 10^6 = 1_000_000
+        let fractional_tokens = token_supply % decimal_multiplier;
+        if fractional_tokens != 0 {
+            return Err(ValueInvalid.into());
+        }
+
+        // check wether it meets min/max treshold:
+        global_config
+            .lamport_amount_config
+            .validate(&reserve_lamport)?;
+
+        global_config
+            .token_supply_config
+            .validate(&(token_supply / decimal_multiplier))?;
+
+        global_config.token_decimals_config.validate(&decimals)?;
+        //
+
+        // create token launch pda:
+        // pub struct BondingCurve {
+        //     pub token_mint: Pubkey,
+        //     pub creator: Pubkey,
+        //     pub init_lamport: u64,
+        //     pub token_total_supply: u64,
+        //     pub virtual_sol_reserves: u64,
+        //     pub virtual_token_reserves: u64,
+        //     pub real_sol_reserves: u64,
+        //     pub real_token_reserves: u64,
+        //     pub is_completed: bool,
         // }
+        bonding_curve.token_mint = token.key();
+        bonding_curve.creator = creator.key();
+        bonding_curve.init_lamport = reserve_lamport; // ???
 
-        // global_config
-        //     .lamport_amount_config
-        //     .validate(&reserve_lamport)?;
+        bonding_curve.virtual_sol_reserves = global_config.initial_virtual_sol_reserves_config;
+        bonding_curve.virtual_token_reserves = global_config.initial_virtual_token_reserves_config;
+        bonding_curve.real_sol_reserves = 0;
+        bonding_curve.real_token_reserves = global_config.initial_real_token_reserves_config;
+        bonding_curve.token_total_supply = token_supply; // 1B
 
-        // global_config
-        //     .token_supply_config
-        //     .validate(&(token_supply / decimal_multiplier))?;
+        // create global token account (for the bonding curve to hold tokens)
+        associated_token::create(CpiContext::new(
+            self.associated_token_program.to_account_info(),
+            associated_token::Create {
+                payer: creator.to_account_info(),
+                associated_token: global_token_account.to_account_info(),
+                authority: global_vault.to_account_info(),
+                mint: token.to_account_info(),
+                token_program: self.token_program.to_account_info(),
+                system_program: self.system_program.to_account_info(),
+            },
+        ))?;
 
-        // global_config.token_decimals_config.validate(&decimals)?;
+        let signer_seeds: &[&[&[u8]]] = &[&[GLOBAL.as_bytes(), &[global_vault_bump]]];
 
-        // // create token launch pda
-        // bonding_curve.token_mint = token.key();
-        // bonding_curve.creator = creator.key();
-        // bonding_curve.init_lamport = reserve_lamport;
+        // mint tokens to bonding curve & team
+        token::mint_to(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                token::MintTo {
+                    mint: token.to_account_info(),
+                    to: global_token_account.to_account_info(),
+                    authority: global_vault.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            token_supply,
+        )?;
 
-        // bonding_curve.virtual_sol_reserves = global_config.initial_virtual_sol_reserves_config;
-        // bonding_curve.virtual_token_reserves = global_config.initial_virtual_token_reserves_config;
-        // bonding_curve.real_sol_reserves = 0;
-        // bonding_curve.real_token_reserves = global_config.initial_real_token_reserves_config;
-        // bonding_curve.token_total_supply = token_supply;
+        // create metadata
+        metadata::create_metadata_accounts_v3(
+            CpiContext::new_with_signer(
+                self.mpl_token_metadata_program.to_account_info(),
+                metadata::CreateMetadataAccountsV3 {
+                    metadata: self.token_metadata_account.to_account_info(),
+                    mint: token.to_account_info(),
+                    mint_authority: global_vault.to_account_info(),
+                    payer: creator.to_account_info(),
+                    update_authority: global_vault.to_account_info(),
+                    system_program: self.system_program.to_account_info(),
+                    rent: self.rent.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            DataV2 {
+                name,
+                symbol,
+                uri,
+                seller_fee_basis_points: 0,
+                creators: None,
+                collection: None,
+                uses: None,
+            },
+            false,
+            true,
+            None,
+        )?;
 
-        // // create global token account
-        // associated_token::create(CpiContext::new(
-        //     self.associated_token_program.to_account_info(),
-        //     associated_token::Create {
-        //         payer: creator.to_account_info(),
-        //         associated_token: global_token_account.to_account_info(),
-        //         authority: global_vault.to_account_info(),
-        //         mint: token.to_account_info(),
-        //         token_program: self.token_program.to_account_info(),
-        //         system_program: self.system_program.to_account_info(),
-        //     },
-        // ))?;
+        //  revoke mint authority
+        token::set_authority(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                token::SetAuthority {
+                    current_authority: global_vault.to_account_info(),
+                    account_or_mint: token.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            AuthorityType::MintTokens,
+            None,
+        )?;
 
-        // let signer_seeds: &[&[&[u8]]] = &[&[GLOBAL.as_bytes(), &[global_vault_bump]]];
+        bonding_curve.is_completed = false;
 
-        // // mint tokens to bonding curve & team
-        // token::mint_to(
-        //     CpiContext::new_with_signer(
-        //         self.token_program.to_account_info(),
-        //         token::MintTo {
-        //             mint: token.to_account_info(),
-        //             to: global_token_account.to_account_info(),
-        //             authority: global_vault.to_account_info(),
-        //         },
-        //         signer_seeds,
-        //     ),
-        //     token_supply,
-        // )?;
-
-        // // create metadata
-        // metadata::create_metadata_accounts_v3(
-        //     CpiContext::new_with_signer(
-        //         self.mpl_token_metadata_program.to_account_info(),
-        //         metadata::CreateMetadataAccountsV3 {
-        //             metadata: self.token_metadata_account.to_account_info(),
-        //             mint: token.to_account_info(),
-        //             mint_authority: global_vault.to_account_info(),
-        //             payer: creator.to_account_info(),
-        //             update_authority: global_vault.to_account_info(),
-        //             system_program: self.system_program.to_account_info(),
-        //             rent: self.rent.to_account_info(),
-        //         },
-        //         signer_seeds,
-        //     ),
-        //     DataV2 {
-        //         name,
-        //         symbol,
-        //         uri,
-        //         seller_fee_basis_points: 0,
-        //         creators: None,
-        //         collection: None,
-        //         uses: None,
-        //     },
-        //     false,
-        //     true,
-        //     None,
-        // )?;
-
-        // //  revoke mint authority
-        // token::set_authority(
-        //     CpiContext::new_with_signer(
-        //         self.token_program.to_account_info(),
-        //         token::SetAuthority {
-        //             current_authority: global_vault.to_account_info(),
-        //             account_or_mint: token.to_account_info(),
-        //         },
-        //         signer_seeds,
-        //     ),
-        //     AuthorityType::MintTokens,
-        //     None,
-        // )?;
-
-        // bonding_curve.is_completed = false;
-
-        // emit!(LaunchEvent {
-        //     creator: self.creator.key(),
-        //     mint: self.token.key(),
-        //     bonding_curve: self.bonding_curve.key(),
-        //     metadata: self.token_metadata_account.key(),
-        //     decimals,
-        //     token_supply,
-        //     reserve_lamport,
-        //     reserve_token: global_config.initial_real_token_reserves_config
-        // });
+        emit!(LaunchEvent {
+            creator: self.creator.key(),
+            mint: self.token.key(),
+            bonding_curve: self.bonding_curve.key(),
+            metadata: self.token_metadata_account.key(),
+            decimals,
+            token_supply,
+            reserve_lamport,
+            reserve_token: global_config.initial_real_token_reserves_config
+        });
 
         Ok(())
     }

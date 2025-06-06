@@ -85,28 +85,29 @@ export const configProject = async () => {
   const migrationWallet = new PublicKey("DQ8fi6tyN9MPD5bpSpUXxKd9FVRY2WcnoniVEgs6StEW");
   // Create a dummy config object to pass as argument.
   const newConfig = {
-    authority: payer.publicKey,
-    migrationAuthority: payer.publicKey,
+    authority: payer.publicKey, // from node wallet
+    migrationAuthority: payer.publicKey, // from node wallet
     teamWallet: teamWallet,
     migrationWallet: migrationWallet,
     initBondingCurve: new BN(TEST_INIT_BONDING_CURVE),
-    platformBuyFee: 1, // Example fee: 0.1%
-    platformSellFee: 1, // Example fee: 0.1%
-    platformMigrationFee: 1, //  Example fee: 0.1%
+    platformBuyFee: 10, // Example fee: 1%
+    platformSellFee: 10, // Example fee: 1%
+    platformMigrationFee: 10, //  Example fee: 1% 
     lamportAmountConfig: {
-      range: { min: new BN(50_000_000_0), max: new BN(50_000_000_0) },
+      range: { min: new BN(20_000_000_000), max: new BN(20_000_000_000) }, // min and max amount of sol allowed for [virtual sol reserves]
     },
     tokenSupplyConfig: {
-      range: { min: new BN(1_000_000_000), max: new BN(1_000_000_000) },
+      // Provided in raw supply (without decimal multiplier)
+      range: { min: new BN(1_000_000_000), max: new BN(1_000_000_000) }, // min and max tokens allowed for [virtual token reserves]
     },
-    tokenDecimalsConfig: { range: { min: 6, max: 6 } },
+    tokenDecimalsConfig: { range: { min: 6, max: 6 } }, // max allowd decimals for a coin
     initialVirtualTokenReservesConfig: new BN(TEST_INITIAL_VIRTUAL_TOKEN_RESERVES),
     initialVirtualSolReservesConfig: new BN(TEST_INITIAL_VIRTUAL_SOL_RESERVES),
     initialRealTokenReservesConfig: new BN(TEST_INITIAL_REAL_TOKEN_RESERVES),
     initialRaydiumTokenReserves: new BN(TEST_INITIAL_RAYDIUM_TOKEN_RESERVES),
     initialRaydiumSolAmount: new BN(TEST_INITIAL_RAYDIUM_SOL_AMOUNT),
 
-    curveLimit: new BN(1_416_000_000), //  Example limit: 85 SOL
+    curveLimit: new BN(/*1_416_000_000*/85_000_000_000), //  Example limit: 85 SOL (lamports to complete the bonding curve)
     initialized: false,
   };
 
@@ -128,9 +129,9 @@ export const createBondingCurve = async () => {
   const configAccount = await program.account.config.fetch(configPda);
 
   const tx = await createBondingCurveTx(
-    TEST_DECIMALS,
-    TEST_TOKEN_SUPPLY,
-    TEST_VIRTUAL_RESERVES,
+    TEST_DECIMALS, // 6
+    TEST_TOKEN_SUPPLY, // 1B
+    TEST_VIRTUAL_RESERVES, // 20 SOL
 
     //  metadata
     TEST_NAME,

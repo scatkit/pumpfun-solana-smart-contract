@@ -39,9 +39,9 @@ export const createConfigTx = async (
   console.log("configPda: ", configPda.toBase58());
 
   const tx = await program.methods
-    .configure(newConfig)
+    .configure(newConfig) // config
     .accounts({
-      payer: admin,
+      payer: admin, // creator
     })
     .transaction();
 
@@ -54,8 +54,8 @@ export const createConfigTx = async (
 
 export const createBondingCurveTx = async (
   decimal: number,
-  supply: number,
-  reserve: number,
+  supply: number, // token supply (e.g 1B)
+  reserve: number, // sol reserves (e.g 20 SOL)
   name: string,
   symbol: string,
   uri: string,

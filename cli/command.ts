@@ -28,6 +28,7 @@ programCommand('migrate')
     await migrate(new PublicKey(mint));
   });
 
+// Initializing the program
 programCommand("config").action(async (directory, cmd) => {
   const { env, keypair, rpc } = cmd.opts();
 
@@ -37,7 +38,7 @@ programCommand("config").action(async (directory, cmd) => {
 
   await setClusterConfig(env, keypair, rpc);
 
-  await configProject();
+  await configProject(); // set up the PumpRaydium
 });
 
 programCommand("curve").action(async (directory, cmd) => {

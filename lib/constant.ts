@@ -4,19 +4,19 @@ import { Cluster, PublicKey } from "@solana/web3.js";
 export const SEED_CONFIG = "config";
 export const SEED_BONDING_CURVE = "bonding_curve";
 
-export const TEST_NAME = "TrueSin";
-export const TEST_SYMBOL = "TrueSin";
+export const TEST_NAME = "sc4m";
+export const TEST_SYMBOL = "SCAM";
 export const TEST_URI =
   "https://gateway.irys.xyz/GwKuTp6xH8FktZcLfF9Uk7kPZX5iME5DsrPU2nVe6nWM";
-export const TEST_VIRTUAL_RESERVES = 50_000_000_0;
-export const TEST_TOKEN_SUPPLY = 1_000_000_000_000_000;
+export const TEST_VIRTUAL_RESERVES = 20_000_000_000; // 20 SOL
+export const TEST_TOKEN_SUPPLY = 1_000_000_000_000_000; // 1B
 export const TEST_DECIMALS = 6;
 export const TEST_INIT_BONDING_CURVE = 80;
 export const TEST_INITIAL_VIRTUAL_TOKEN_RESERVES = 1_073_000_191_000_000;
-export const TEST_INITIAL_VIRTUAL_SOL_RESERVES = 50_000_000_0;
+export const TEST_INITIAL_VIRTUAL_SOL_RESERVES = /*50_000_000_0*/ 20_000_000_000; // 20 SOL
 export const TEST_INITIAL_REAL_TOKEN_RESERVES = 793_100_000_000_000;
 export const TEST_INITIAL_RAYDIUM_TOKEN_RESERVES = 206_900_000_000_000;
-export const TEST_INITIAL_RAYDIUM_SOL_AMOUNT = 1_000_000_0;
+export const TEST_INITIAL_RAYDIUM_SOL_AMOUNT = 79_000_000_000;
 
 const cluster: Cluster = "mainnet-beta";
 
