@@ -65,20 +65,24 @@ impl<'info> Configure<'info> {
         if self.config.owner != &crate::ID { // if config PDA hasn't been initialized 
             let cpi_context = CpiContext::new( // specifies which accounts are involved
                 self.system_program.to_account_info(),
-                system_program::CreateAccount {
+                system_program::CreateAccount { // system program requires these two fields:
                     from: self.payer.to_account_info(), // who funds the new account
-                    to: self.config.to_account_info(), // acc being created
+                    to: self.config.to_account_info(), // the new acc to be created 
                 },
             );
             system_program::create_account(
-                cpi_context.with_signer(&[&[CONFIG.as_bytes(), &[config_bump]]]),
+                // I am asking the system_program to init this PDA
+                // Only the my program (smart contract address) that owns the PDA can sign for it.
+                // it provides the PDA seeds to prove it
+                cpi_context.with_signer(&[&[CONFIG.as_bytes(), &[config_bump]]]), 
                 config_cost,
                 serialized_config_len as u64,
                 &crate::ID,
             )?;
         } else {
+            // validate the existing config if already initialized
             let data = self.config.try_borrow_data()?;
-            if data.len() < 8 || &data[0..8] != Config::DISCRIMINATOR {
+            if data.len() < 8 || &data[0..8] != Config::DISCRIMINATOR { // ensure that the descriminator (first 8 bytes) matches
                 return err!(ContractError::IncorrectConfigAccount);
             }
             let config = Config::deserialize(&mut &data[8..])?;
@@ -88,25 +92,25 @@ impl<'info> Configure<'info> {
             }
         }
 
-        let lamport_delta = (config_cost as i64) - (self.config.lamports() as i64);
-        if lamport_delta > 0 {
+        let lamport_delta = (config_cost as i64) - (self.config.lamports() as i64); 
+        if lamport_delta > 0 {  // top up rent if needed
             system_program::transfer(
                 CpiContext::new(
                     self.system_program.to_account_info(),
                     system_program::Transfer {
-                        from: self.payer.to_account_info(),
-                        to: self.config.to_account_info(),
+                        from: self.payer.to_account_info(), // payer
+                        to: self.config.to_account_info(),  // receiver
                     },
                 ),
                 lamport_delta as u64,
             )?;
-            self.config.realloc(serialized_config_len, false)?;
+            self.config.realloc(serialized_config_len, false)?; // This resizes the config account’s data buffer to fit the new serialized config.
         }
 
-        (self.config.try_borrow_mut_data()?[..serialized_config_len])
+        (self.config.try_borrow_mut_data()?[..serialized_config_len]) // write serizalied bytes (including the descriminator) into the config account's data buffer
             .copy_from_slice(serialized_config.as_slice());
 
-        //  initialize global vault if needed
+        //  initialize global vault if it hasn't been
         if self.global_vault.lamports() == 0 {
             sol_transfer_from_user(
                 &self.payer,

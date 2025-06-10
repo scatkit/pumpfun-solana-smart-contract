@@ -55,7 +55,7 @@ pub struct CreateBondingCurve<'info> {
         mut,
         seeds = [
             METADATA.as_bytes(),
-            metadata::ID.as_ref(),
+            metadata::ID.as_ref(), // metaplex address 
             token.key().as_ref(),
         ],
         bump,
@@ -164,14 +164,15 @@ impl<'info> CreateBondingCurve<'info> {
 
         // create global token account (for the bonding curve to hold tokens)
         associated_token::create(CpiContext::new(
-            self.associated_token_program.to_account_info(),
+            self.associated_token_program.to_account_info(), // specify the program to be invoked
             associated_token::Create {
-                payer: creator.to_account_info(),
-                associated_token: global_token_account.to_account_info(),
-                authority: global_vault.to_account_info(),
-                mint: token.to_account_info(),
-                token_program: self.token_program.to_account_info(),
-                system_program: self.system_program.to_account_info(),
+                // accounts required by the instruction:
+                payer: creator.to_account_info(), // pays rent and creation fees
+                associated_token: global_token_account.to_account_info(), // ata being created
+                authority: global_vault.to_account_info(), // owner of the ata
+                mint: token.to_account_info(),    // token mint this ata is tied to
+                token_program: self.token_program.to_account_info(), // required by the ATA program to call into the SPL token program to initialize the ATA
+                system_program: self.system_program.to_account_info(), // required to create the account on-chain (it's the only program that can create new system accounts)
             },
         ))?;
 
@@ -188,16 +189,16 @@ impl<'info> CreateBondingCurve<'info> {
                 },
                 signer_seeds,
             ),
-            token_supply,
+            token_supply, // mints (e.g 1B tokens)
         )?;
 
         // create metadata
         metadata::create_metadata_accounts_v3(
             CpiContext::new_with_signer(
-                self.mpl_token_metadata_program.to_account_info(),
+                self.mpl_token_metadata_program.to_account_info(), // program to be invoked
                 metadata::CreateMetadataAccountsV3 {
-                    metadata: self.token_metadata_account.to_account_info(),
-                    mint: token.to_account_info(),
+                    metadata: self.token_metadata_account.to_account_info(), // metadata itself
+                    mint: token.to_account_info(), // the token this metadata is tied to
                     mint_authority: global_vault.to_account_info(),
                     payer: creator.to_account_info(),
                     update_authority: global_vault.to_account_info(),
